@@ -1,2 +1,32 @@
+# Data — raw dataset files not included (see data/README.md)
 data/babel_briefings/
+*.json
+*.parquet
+*.arrow
+
+# HuggingFace cache
+.cache/
+~/.cache/huggingface/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+# otebooks/outputs/figures/
+# notebooks/outputs/results/
+
+# OS
 .DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
