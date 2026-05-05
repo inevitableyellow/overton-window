@@ -5,10 +5,16 @@
 ---
 
 ## Overview
+The **Overton Window** is a political concept that describes the range of political ideas considered acceptable within public discourse, yet it is rarely operationalized using empirical or computational methods. This study presents a replicable computational framework toward quantifying Overton Window shifts through distributional analysis of mainstream US news
+headlines.
 
-This project operationalizes the political science concept of the **Overton Window** — the range of ideas considered acceptable in mainstream discourse — using computational methods applied to over 6 million U.S. news headlines spanning two decades. By treating the 2001–2015 period as a baseline and measuring how the 2016–2024 corpus drifts from it in TF-IDF space, the project quantifies how the boundaries of mainstream political discourse have shifted across five major outlets.
+Originally developed by Joseph P. Overton in the 1990s, the concept describes not just what is politically controversial, but what is uncontroversial, capturing the background assumptions that go unmarked in ordinary discourse. Rather than representing a fixed boundary, the window is recognized as dynamic, shifting constantly in response to social, political, economic, and cultural influences. Despite its widespread use as an analytical concept in political science and journalism, it has rarely been treated as an empirical object that can be measured, tracked, and validated across time.
 
-**Research question:** Can the drift of the Overton Window be measured and characterized using NLP methods applied to large-scale news headline corpora?
+This project treats the Overton Window as an observable linguistic phenomenon, approximated through patterns in political language used in mainstream news headlines. Headlines are chosen as the primary feature space because they are highly visible, intentionally framed by editorial decisions, and compact, making them a natural proxy for the boundaries of acceptable narratives presented to a general audience. By measuring how the distributional center of headline language shifts relative to a stable historical reference, this framework operationalizes window movement in a way that is reproducible, scalable, and applicable to future corpora.
+
+Computational methods are applied to over 5 million U.S. news headlines spanning two decades. By treating the 2001–2015 period as a baseline and measuring how the 2016–2024 corpus drifts from it in TF-IDF space, the project quantifies how the boundaries of mainstream political discourse have shifted across five major news outlets, contributing to a growing foundation for understanding the limits of political acceptability.
+
+**Research question:** Can the drift of the Overton Window be measured and characterized using natural language processing methods applied to large-scale news headline corpora, and is such a shift statistically significant and stable?
 
 ---
 
@@ -16,8 +22,12 @@ This project operationalizes the political science concept of the **Overton Wind
 
 ### Primary Dataset
 **US Multi-Outlet News Headlines 2001–2024**  
-Source: [`dess-mannheim/US_Multi_Outlet_News_Headlines2001_2024`](https://huggingface.co/datasets/dess-mannheim/US_Multi_Outlet_News_Headlines2001_2024) on HuggingFace  
-Access: **Restricted — research use only.** Request access on HuggingFace, then authenticate via `huggingface-hub` before running the main analysis notebook.
+(Chair for Data Science in the Economic and Social Sciences, University of Mannheim, 2026)  
+
+Source: [`dess-mannheim/US_Multi_Outlet_News_Headlines2001_2024`](https://huggingface.co/datasets/dess-mannheim/US_Multi_Outlet_News_Headlines2001_2024)  
+Access: **Restricted to research and academic use.** Users must not redistribute headline text. Request access via HuggingFace, then authenticate with `huggingface-hub` before running the main analysis notebook. Cite the associated dataset publication when using this data.
+
+See data/README.md for loading instructions.
 
 | Outlet | Headlines |
 |---|---|
@@ -30,9 +40,13 @@ Access: **Restricted — research use only.** Request access on HuggingFace, the
 | **Total Headlines (Filtered)** | **5,804,010** |
 
 ### Secondary Dataset (Baseline Exploration)
-**Babel Briefings** — multilingual news dataset used in early exploratory analysis (`01_baseline_exploration.ipynb`). 54 JSON files by country/language. See notebook for schema details.
+**Babel Briefings**  
+(Leeb & Schölkopf, 2024)  
 
-Raw data files are not included in this repository. See notebooks for loading instructions.
+Source: [`felixludos/babel-briefings`](https://huggingface.co/datasets/felixludos/babel-briefings) on HuggingFace  
+Multilingual news dataset used in early exploratory analysis (`01_baseline_exploration.ipynb`) before the primary dataset was identified. The US English subset (~92,443 headlines, August 2020 – November 2021) provided proof-of-concept validation of the centroid distance framework. 54 JSON files organized by country/language code.
+
+Raw data files are not included in this repository. See data/README.md for loading instructions.
 
 ---
 
@@ -58,27 +72,28 @@ Raw data files are not included in this repository. See notebooks for loading in
 ## Repository Structure
 
 ```
-overton-window-nlp/
+overton-window/
 │
 ├── README.md
 ├── CITATION.cff
 ├── LICENSE
 ├── requirements.txt
 │
-├── notebooks/
-│   ├── 01_baseline_exploration.ipynb   # Early exploration using Babel Briefings dataset
-│   └── 02_main_analysis.ipynb          # Full pipeline: TF-IDF, cosine drift, permutation test, sentiment
+├── data/
+│   └── README.md                       # data source documentation and access instructions/guidelines
 │
-├── src/
-│   └── overton_pipeline.py             # Reusable utilities (vectorization, plotting helpers)
+├── notebooks/
+│   ├── 01_baseline_exploration.ipynb   # early exploration using Babel Briefings dataset
+│   ├── 02_main_analysis.ipynb          # final analysis utilizing US Multi-Outlet News Headlines 2001–2024 dataset
+│   └── outputs/
+│       └── figures/                    # notebook validation outputs and data files for reusability (when allowed)
 │
 ├── outputs/
-│   └── figures/                        # All report figures (fig1–fig7, 300 DPI)
+│   └── figures/                        # all report figures (fig1-fig7, 300 DPI)
 │
-└── data/
-    └── README.md                       # Data source documentation and access instructions
+└── src/
+    └── overton_pipeline.py             # reusable utility functions and quick CLI processing
 ```
-
 ---
 
 ## Reproduction
@@ -97,7 +112,7 @@ login()
 
 ### Run order
 1. (Optional) `01_baseline_exploration.ipynb` — exploratory analysis on Babel Briefings
-2. `02_main_analysis.ipynb` — full analysis pipeline; produces all figures
+2. `02_main_analysis.ipynb` — full analysis pipeline; produces all figures **OR** `overton_pipeline.ipynb` for quick analysis/overview
 
 ---
 
@@ -115,12 +130,13 @@ If you reference this work, please cite:
 
 ```bibtex
 @misc{heard2026overton,
-  author       = {Heard, Paris},
-  title        = {Mapping the {Overton} {Window}: Discourse Shift in {U.S.} News Headlines, 2001--2024},
-  year         = {2026},
-  institution  = {School of Information, University of Michigan},
-  note         = {Course project, SI 630: Natural Language Processing},
-  url          = {https://github.com/YOUR_USERNAME/overton-window-nlp}
+  author      = {Heard, Paris},
+  title       = {Peering Inside the {Overton} {Window}: A Computational Analysis of
+                 Discourse Shift in {US} News Headlines (2001--2024)},
+  year        = {2026},
+  institution = {School of Information, University of Michigan},
+  note        = {Course project, SI 630: Natural Language Processing},
+  url         = {https://github.com/inevitableyellow/overton-window}
 }
 ```
 
