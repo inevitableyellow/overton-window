@@ -85,8 +85,7 @@ def parse_date(date_str: str) -> str | None:
     """
     Parse a date string in YYYY/MM or YYYY/MM/DD format.
 
-    Returns a normalized 'YYYY-MM' string, or None if the date is invalid
-    or outside plausible range (1990–2030).
+    Returns a normalized 'YYYY-MM' string, or None if the date is invalid or outside plausible range (1990–2030).
     """
     try:
         parts = str(date_str).strip().split("/")
@@ -103,8 +102,7 @@ def preprocess(text: str) -> str:
     """
     Normalize a headline for TF-IDF vectorization.
 
-    Steps: lowercase → strip URLs → keep only letters/digits/hyphens
-    → collapse whitespace.
+    Steps: lowercase → strip URLs → keep only letters/digits/hyphens → collapse whitespace.
     """
     text = str(text).lower()
     text = re.sub(r"http\S+",        "", text)
@@ -114,7 +112,9 @@ def preprocess(text: str) -> str:
 
 
 def is_valid(text: str, min_words: int = MIN_WORDS) -> bool:
-    """Return True if the preprocessed headline meets the minimum word count."""
+    """
+    Return True if the preprocessed headline meets the minimum word count.
+    """
     return len(str(text).split()) >= min_words
 
 
@@ -228,6 +228,8 @@ def build_tfidf(
         max_features=max_features,
         ngram_range=ngram_range,
         min_df=min_df,
+        sublinear_tf=True,
+        stop_words="english",
     )
     X_baseline   = vectorizer.fit_transform(df_baseline["title_clean"])
     X_comparison = vectorizer.transform(df_comparison["title_clean"])
@@ -243,7 +245,9 @@ def build_tfidf(
 
 
 def cosine_distance(a: np.ndarray, b: np.ndarray) -> float:
-    """Return cosine distance (1 − cosine similarity) between two vectors."""
+    """
+    Return cosine distance (1 − cosine similarity) between two vectors.
+    """
     sim = cosine_similarity(a.reshape(1, -1), b.reshape(1, -1))[0, 0]
     return float(1.0 - sim)
 
@@ -302,16 +306,20 @@ def permutation_test(
     X_comparison: object,
     centroid_baseline: np.ndarray,
     n_permutations: int = 1000,
-    sample_size: int    = 5000,
     random_state: int   = 42,
 ) -> dict:
     """
     Non-parametric permutation test for observed Overton Window drift.
 
-    Pools a sample from both corpora, randomly splits n_permutations times,
-    and computes the mean cosine distance from the baseline centroid for each
-    permuted 'comparison' half. The empirical p-value is the proportion of
-    permuted means >= the observed mean.
+    Shuffles row indices within the comparison matrix n_permutations times.
+    For each permutation, rows are reassigned to months and monthly centroids
+    are recomputed, then their mean cosine distance from the baseline centroid
+    is recorded. The empirical p-value is the proportion of permuted means
+    >= the observed mean.
+
+    This mirrors the monthly centroid distance computation used throughout
+    the rest of the analysis — permuted means and observed means live in
+    the same space and are directly comparable.
 
     Returns
     -------
@@ -320,44 +328,53 @@ def permutation_test(
     """
     rng = np.random.default_rng(random_state)
 
-    # observed mean
-    observed_mean = float(
-        np.mean([
-            cosine_distance(
-                np.asarray(X_comparison[i].mean(axis=0)).flatten(),
-                centroid_baseline,
-            )
-            for i in range(min(sample_size, X_comparison.shape[0]))
-        ])
-    )
+    unique_months = df_comparison["year_month"].values
+    month_list    = sorted(set(unique_months))
+    month_indices = {ym: np.where(unique_months == ym)[0] for ym in month_list}
 
+    # observed mean from precomputed monthly drift if available,
+    # otherwise compute directly from monthly centroids
+    observed_dists = []
+    for ym in month_list:
+        idx  = month_indices[ym]
+        if len(idx) < 50:
+            continue
+        mat  = X_comparison[idx]
+        ctrd = np.asarray(mat.mean(axis=0)).flatten()
+        dist = float(1 - cosine_similarity(
+            ctrd.reshape(1, -1), centroid_baseline.reshape(1, -1))[0, 0])
+        observed_dists.append(dist)
+
+    observed_mean = float(np.mean(observed_dists))
     print(f"Observed comparison mean cosine distance: {observed_mean:.4f}")
     print(f"Running {n_permutations} permutations...")
 
-    # pool
-    n_base = min(sample_size // 2, X_baseline.shape[0])
-    n_comp = min(sample_size // 2, X_comparison.shape[0])
-    base_idx = rng.choice(X_baseline.shape[0], n_base, replace=False)
-    comp_idx = rng.choice(X_comparison.shape[0], n_comp, replace=False)
-
-    import scipy.sparse as sp
-    pool = sp.vstack([X_baseline[base_idx], X_comparison[comp_idx]])
-    n_pool = pool.shape[0]
-
+    n_rows = X_comparison.shape[0]
     permuted_means = []
-    for i in range(n_permutations):
-        perm = rng.permutation(n_pool)
-        perm_comp = pool[perm[:n_comp]]
-        dists = cosine_similarity(
-            perm_comp, centroid_baseline.reshape(1, -1)
-        ).flatten()
-        permuted_means.append(float(1.0 - dists.mean()))
 
+    for i in range(n_permutations):
+        shuffled_idx = rng.permutation(n_rows)
+
+        perm_dists = []
+        start = 0
+        for ym in month_list:
+            n   = len(month_indices[ym])
+            idx = shuffled_idx[start:start + n]
+            start += n
+            if n < 50:
+                continue
+            mat  = X_comparison[idx]
+            ctrd = np.asarray(mat.mean(axis=0)).flatten()
+            dist = float(1 - cosine_similarity(
+                ctrd.reshape(1, -1), centroid_baseline.reshape(1, -1))[0, 0])
+            perm_dists.append(dist)
+
+        permuted_means.append(float(np.mean(perm_dists)))
         if (i + 1) % 100 == 0:
             print(f"  {i+1}/{n_permutations} done...")
 
     permuted_means = np.array(permuted_means)
-    p_value = float(np.mean(permuted_means >= observed_mean))
+    p_value        = float(np.mean(permuted_means >= observed_mean))
 
     print(f"\n=== Permutation Test Results ===")
     print(f"Observed mean cosine distance : {observed_mean:.4f}")
@@ -421,49 +438,60 @@ def compute_sentiment(df: pd.DataFrame, corpus_label: str) -> pd.DataFrame:
 
 def sentiment_conditioned_drift(
     df_baseline: pd.DataFrame,
-    df_comparison: pd.DataFrame,
-    X_baseline: object,
-    X_comparison: object,
-    centroid_baseline: np.ndarray,
+    df_comparison: pd.DataFrame
 ) -> dict:
     """
     Compute monthly cosine drift separately for negative, neutral, and positive
     headlines in each corpus.
+
+    For each sentiment bin, a new TF-IDF vectorizer is refit on the
+    sentiment-filtered baseline, and distances are measured from that
+    sentiment-specific centroid. This mirrors the original analysis exactly.
 
     Returns
     -------
     dict mapping sentiment bin → DataFrame of monthly drift stats
     """
     results = {}
+
     for sent_bin in ["negative", "neutral", "positive"]:
-        records = []
-        for corpus_label, df, X in [
-            ("baseline",   df_baseline,   X_baseline),
-            ("comparison", df_comparison, X_comparison),
+        base_sub = df_baseline[df_baseline["sentiment_bin"] == sent_bin].reset_index(drop=True)
+        comp_sub = df_comparison[df_comparison["sentiment_bin"] == sent_bin].reset_index(drop=True)
+
+        if len(base_sub) < 1000 or len(comp_sub) < 1000:
+            print(f"[{sent_bin}] insufficient data, skipping")
+            continue
+
+        # refit vectorizer on sentiment-filtered baseline only
+        vec_s = TfidfVectorizer(
+            max_features=10_000, ngram_range=(1, 2),
+            min_df=5, stop_words="english", sublinear_tf=True,
+        )
+        B_s    = vec_s.fit_transform(base_sub["title_clean"])
+        C_s    = vec_s.transform(comp_sub["title_clean"])
+        ctrd_s = np.asarray(B_s.mean(axis=0)).flatten()
+
+        rows = []
+        for df_sub, mat, label in [
+            (base_sub, B_s, "baseline"),
+            (comp_sub, C_s, "comparison"),
         ]:
-            mask = df["sentiment_bin"] == sent_bin
-            sub  = df[mask].reset_index(drop=True)
-            orig_idx = df[mask].index.tolist()
-            if len(orig_idx) < 10:
-                continue
+            for ym, grp in df_sub.groupby("year_month"):
+                idx = grp.index.tolist()
+                if len(idx) < 30:
+                    continue
+                m    = mat[idx]
+                c    = np.asarray(m.mean(axis=0)).flatten()
+                dist = float(1 - cosine_similarity(
+                    c.reshape(1, -1), ctrd_s.reshape(1, -1))[0, 0])
+                rows.append({"month": ym, "cosine_dist": dist, "corpus": label})
 
-            for month, group in sub.groupby("year_month"):
-                local_idx = group.index.tolist()
-                global_idx = [orig_idx[i] for i in local_idx]
-                mat  = X[global_idx]
-                ctrd = np.asarray(mat.mean(axis=0)).flatten()
-                dist = cosine_distance(ctrd, centroid_baseline)
-                records.append({
-                    "month":       month,
-                    "cosine_dist": dist,
-                    "corpus":      corpus_label,
-                    "n":           len(local_idx),
-                })
+        df_s = pd.DataFrame(rows).sort_values("month").reset_index(drop=True)
+        results[sent_bin] = df_s
 
-        if records:
-            results[sent_bin] = (
-                pd.DataFrame(records).sort_values("month").reset_index(drop=True)
-            )
+        base_mean = df_s[df_s["corpus"] == "baseline"]["cosine_dist"].mean()
+        comp_mean = df_s[df_s["corpus"] == "comparison"]["cosine_dist"].mean()
+        print(f"[{sent_bin:8s}]  baseline={base_mean:.4f}  comparison={comp_mean:.4f}  drift={comp_mean - base_mean:+.4f}")
 
     return results
 
@@ -546,7 +574,9 @@ def top_tfidf_terms(
 # ── 9. Figures ────────────────────────────────────────────────────────────────
 
 def _shared_x_setup(axes, all_months: list, step_divisor: int = 24):
-    """Apply shared x-axis tick labels to a list of matplotlib Axes."""
+    """
+    Apply shared x-axis tick labels to a list of matplotlib axes.
+    """
     step  = max(1, len(all_months) // step_divisor)
     ticks = list(range(0, len(all_months), step))
     axes[-1].set_xticks(ticks)
@@ -560,7 +590,9 @@ def plot_drift(
     df_comparison_drift: pd.DataFrame,
     output_path: str = "outputs/figures/fig1_tfidf_drift.png",
 ):
-    """Figure 1: Monthly TF-IDF cosine distance and intra-month spread."""
+    """
+    Figure 1: Monthly TF-IDF cosine distance and intra-month spread.
+    """
     all_months = sorted(
         set(df_baseline_drift["month"]) | set(df_comparison_drift["month"])
     )
@@ -607,11 +639,19 @@ def plot_permutation_test(
     perm_results: dict,
     output_path: str = "outputs/figures/fig2_permutation_test.png",
 ):
-    """Figure 2: Permutation test null distribution vs observed drift."""
-    fig, ax = plt.subplots(figsize=(10, 5))
-    fig.suptitle("Figure 2: Permutation Test — Null Distribution of Mean Cosine Distance",
-                 fontsize=13)
+    """
+    Figure 2: Permutation test null distribution vs observed drift,
+    with a zoomed inset of the null distribution.
+    """
+    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
+    fig, ax = plt.subplots(figsize=(12, 5))
+    fig.suptitle(
+        "Figure 2: Permutation Test — Null Distribution of Mean Cosine Distance",
+        fontsize=13,
+    )
+
+    # main plot
     ax.hist(perm_results["permuted_means"], bins=50, color=BLUE,
             alpha=0.7, label="Permuted means (n=1,000)")
     ax.axvline(perm_results["observed_mean"], color=ORANGE, linewidth=2,
@@ -620,6 +660,23 @@ def plot_permutation_test(
     ax.set_ylabel("Frequency")
     ax.legend(fontsize=10)
     ax.grid(axis="y", alpha=0.3)
+
+    # zoomed inset of null distribution
+    axins = inset_axes(ax, width="35%", height="55%", loc="center")
+    axins.hist(perm_results["permuted_means"], bins=50, color=BLUE, alpha=0.7)
+    axins.axvline(perm_results["permuted_means"].mean(), color=GRAY,
+                  linewidth=1.5, linestyle="--",
+                  label=f"Null mean = {perm_results['permuted_means'].mean():.4f}")
+
+    # set inset x limits tight around the null distribution
+    null_min = perm_results["permuted_means"].min()
+    null_max = perm_results["permuted_means"].max()
+    padding  = (null_max - null_min) * 0.5
+    axins.set_xlim(null_min - padding, null_max + padding)
+    axins.set_title("Null distribution\n(zoomed)", fontsize=8)
+    axins.tick_params(labelsize=7)
+    axins.legend(fontsize=7)
+    axins.grid(axis="y", alpha=0.3)
 
     plt.tight_layout()
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
@@ -633,7 +690,9 @@ def plot_sentiment(
     sent_comparison: pd.DataFrame,
     output_path: str = "outputs/figures/fig3_sentiment.png",
 ):
-    """Figure 3: Mean sentiment, std, and volatility over time."""
+    """
+    Figure 6: Mean sentiment, std, and volatility over time.
+    """
     all_months = sorted(
         set(sent_baseline["month"]) | set(sent_comparison["month"])
     )
@@ -641,7 +700,7 @@ def plot_sentiment(
 
     fig, axes = plt.subplots(3, 1, figsize=(16, 12), sharex=True)
     fig.suptitle(
-        "Figure 3: Headline Sentiment Over Time\n"
+        "Figure 6: Headline Sentiment Over Time\n"
         "(NYT · LAT · WSJ · Fox News · MSNBC  |  2001–2024)",
         fontsize=13,
     )
@@ -679,9 +738,11 @@ def plot_sentiment(
 def plot_sentiment_conditioned_drift(
     results_by_sentiment: dict,
     sent_baseline: pd.DataFrame,
-    output_path: str = "outputs/figures/fig4_sentiment_conditioned.png",
+    output_path: str = "outputs/figures/fig7_sentiment_conditioned.png",
 ):
-    """Figure 4: Cosine drift conditioned on headline sentiment valence."""
+    """
+    Figure 7: Cosine drift conditioned on headline sentiment valence.
+    """
     all_months = sorted(set().union(*[
         df["month"].unique()
         for df in results_by_sentiment.values()
@@ -696,7 +757,7 @@ def plot_sentiment_conditioned_drift(
 
     fig, axes = plt.subplots(3, 1, figsize=(16, 12), sharex=True, sharey=True)
     fig.suptitle(
-        "Figure 4: Sentiment-Conditioned Cosine Distance from Baseline Centroid\n"
+        "Figure 7: Sentiment-Conditioned Cosine Distance from Baseline Centroid\n"
         "(NYT · LAT · WSJ · Fox News · MSNBC  |  2001–2024)",
         fontsize=13,
     )
@@ -733,15 +794,17 @@ def plot_sentiment_conditioned_drift(
 def plot_topic_filters(
     df_comparison_drift: pd.DataFrame,
     filter_results: dict,
-    output_path: str = "outputs/figures/fig5_topic_filters.png",
+    output_path: str = "outputs/figures/fig3_topic_filters.png",
 ):
-    """Figure 5: Comparison corpus drift with topic-filtered variants overlaid."""
+    """
+    Figure 3: Comparison corpus drift with topic-filtered variants overlaid.
+    """
     all_months = sorted(df_comparison_drift["month"].unique())
     m2x = {m: i for i, m in enumerate(all_months)}
 
     fig, ax = plt.subplots(figsize=(16, 6))
     fig.suptitle(
-        "Figure 5: Topic-Filtered Drift — Comparison Corpus (2016–2024)",
+        "Figure 3: Topic-Filtered Drift — Comparison Corpus (2016–2024)",
         fontsize=13,
     )
 
@@ -785,7 +848,9 @@ def save_results(
     sent_comparison: pd.DataFrame,
     output_dir: str = "outputs/results",
 ):
-    """Save monthly drift and sentiment CSVs to disk."""
+    """
+    Save monthly drift and sentiment CSVs to disk.
+    """
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -910,7 +975,7 @@ def main():
         filter_results[name] = (bs, cs)
 
     plot_topic_filters(df_comp_drift, filter_results,
-                       str(out_figures / "fig5_topic_filters.png"))
+                       str(out_figures / "fig3_topic_filters.png"))
 
     # ── Step 7: Sentiment
     if not args.skip_sentiment:
@@ -931,15 +996,13 @@ def main():
         print(f"Cohen's d   : {cohen_d:.4f}")
 
         plot_sentiment(sent_base, sent_comp,
-                       str(out_figures / "fig3_sentiment.png"))
+                       str(out_figures / "fig6_sentiment.png"))
 
         sent_conditioned = sentiment_conditioned_drift(
-            df_baseline, df_comparison,
-            X_baseline, X_comparison, centroid_baseline,
-        )
+            df_baseline, df_comparison)
         plot_sentiment_conditioned_drift(
             sent_conditioned, sent_base,
-            str(out_figures / "fig4_sentiment_conditioned.png"),
+            str(out_figures / "fig7_sentiment_conditioned.png"),
         )
 
         save_results(df_base_drift, df_comp_drift, sent_base, sent_comp,
