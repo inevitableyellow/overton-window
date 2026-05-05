@@ -1,0 +1,27 @@
+# Overton Window NLP Pipeline
+# Python 3.11+
+# Install: pip install -r requirements.txt
+#
+# Note: The primary dataset requires authenticated HuggingFace access for research purposes only.
+# Run `huggingface-cli login` or `from huggingface_hub import login; login()` before executing the notebooks.
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+datasets==3.6.0
+huggingface-hub==0.30.2
+pandas==2.2.3
+numpy==2.2.5
+
+# ── NLP & ML ──────────────────────────────────────────────────────────────────
+scikit-learn==1.6.1
+scipy==1.15.3
+vaderSentiment==3.3.2
+sentence-transformers==5.1.2
+
+# ── Dimensionality Reduction ──────────────────────────────────────────────────
+umap-learn==0.5.9.post2
+
+# ── Visualization ─────────────────────────────────────────────────────────────
+matplotlib==3.10.1
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+tqdm==4.67.1

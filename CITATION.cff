@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+message: "If you use or reference this work, please cite it as below."
+type: software
+title: "Peering Inside the Overton Window: A Computational Analysis of Discourse Shift in US News Headlines (2001 - 2024)"
+authors:
+  - family-names: Heard
+    given-names: Paris
+    affiliation: "School of Information, University of Michigan"
+date-released: 2026-05-04
+url: "https://github.com/YOUR_USERNAME/overton-window-nlp"
+repository-code: "https://github.com/YOUR_USERNAME/overton-window-nlp"
+license: MIT
+keywords:
+  - natural language processing
+  - computational social science
+  - political science
+  - Overton Window
+  - media discourse
+  - media analysis
+  - TF-IDF
+  - sentiment analysis
+  - news headlines
+abstract: >
+  This project applies NLP methods to over 6 million U.S. news headlines
+  from five major outlets (2001–2024) to operationalize and measure drift
+  in the Overton Window — the range of ideas considered acceptable in
+  mainstream political discourse. Using TF-IDF vectorization, cosine
+  distance from a 2001–2015 baseline centroid, permutation testing, and
+  VADER sentiment analysis, the project quantifies how mainstream media
+  discourse shifted significantly in the 2016–2024 period.
