@@ -7,8 +7,8 @@ authors:
     given-names: Paris
     affiliation: "School of Information, University of Michigan"
 date-released: 2026-05-04
-url: "https://github.com/YOUR_USERNAME/overton-window-nlp"
-repository-code: "https://github.com/YOUR_USERNAME/overton-window-nlp"
+url: "https://github.com/inevitableyellow/overton-window"
+repository-code: "https://github.com/inevitableyellow/overton-window"
 license: MIT
 keywords:
   - natural language processing
@@ -21,9 +21,9 @@ keywords:
   - sentiment analysis
   - news headlines
 abstract: >
-  This project applies NLP methods to over 6 million U.S. news headlines
+  This project applies computational methods to over 5 million U.S. news headlines
   from five major outlets (2001–2024) to operationalize and measure drift
-  in the Overton Window — the range of ideas considered acceptable in
+  in the Overton Window, defined as the range of ideas considered acceptable in
   mainstream political discourse. Using TF-IDF vectorization, cosine
   distance from a 2001–2015 baseline centroid, permutation testing, and
   VADER sentiment analysis, the project quantifies how mainstream media
